@@ -192,11 +192,16 @@ DS.IndexedDBSerializer = DS.JSONSerializer.extend({
         var typeName = Ember.String.singularize(relation),
             embeddedPayload = payload._embedded[relation];
 
+        var embeddedType = store.modelFor(typeName);
+
         if (embeddedPayload) {
           if (Object.prototype.toString.call(embeddedPayload) === '[object Array]') {
-            store.pushMany(typeName, embeddedPayload);
+            var normalizedItems = embeddedPayload.map(
+              function (embeddedItem) { return this.normalize(embeddedType, embeddedItem); }.bind(this)
+            );
+            store.pushMany(typeName, normalizedItems);
           } else {
-            store.push(typeName, embeddedPayload);
+            store.push(typeName, this.normalize(embeddedType, embeddedPayload));
           }
         }
       }
@@ -220,8 +225,7 @@ DS.IndexedDBSerializer = DS.JSONSerializer.extend({
     var serializer = this;
 
     return payload.map(function(record) {
-      var extracted = serializer.extractSingle(store, type, record);
-      return serializer.normalize(type, record);
+      return serializer.extractSingle(store, type, record);
     });
   }
 });
@@ -443,19 +447,9 @@ DS.IndexedDBAdapter = DS.Adapter.extend({
    * @param {Object|String|Integer|null} id
    * @param {Object|null} opts
    */
-  find: function (store, type, id, opts) {
+  find: function (store, type, id, snapshot) {
     var adapter = this,
         allowRecursive = true;
-
-    /**
-     * In the case where there are relationships, this method is called again
-     * for each relation. Given the relations have references to the main
-     * object, we use allowRecursive to avoid going further into infinite
-     * recursiveness.
-     */
-    if (opts && typeof opts.allowRecursive !== 'undefined') {
-      allowRecursive = opts.allowRecursive;
-    }
 
     return new Ember.RSVP.Promise(function(resolve, reject) {
       var modelName = type.typeKey,
@@ -726,8 +720,9 @@ DS.IndexedDBAdapter = DS.Adapter.extend({
    * @param {DS.Model} type
    * @param {Object} record
    */
-  createRecord: function (store, type, record) {
+  createRecord: function (store, type, snapshot) {
     var _this = this,
+        record = snapshot.record,
         modelName = type.typeKey;
 
     return new Ember.RSVP.Promise(function(resolve, reject) {
@@ -791,8 +786,9 @@ DS.IndexedDBAdapter = DS.Adapter.extend({
    * @param {DS.Model} type
    * @param {Object} record
    */
-  updateRecord: function (store, type, record) {
+  updateRecord: function (store, type, snapshot) {
     var _this = this,
+        record = snapshot,
         serializedRecord = record.serialize({includeId: true});
 
     return new Ember.RSVP.Promise(function(resolve, reject) {
@@ -849,8 +845,9 @@ DS.IndexedDBAdapter = DS.Adapter.extend({
    * @param {DS.Model} type
    * @param {Object} record
    */
-  deleteRecord: function (store, type, record) {
-    var _this = this;
+  deleteRecord: function (store, type, snapshot) {
+    var _this = this,
+       record = snapshot.record;
 
     return new Ember.RSVP.Promise(function(resolve, reject) {
       var modelName = type.typeKey,
