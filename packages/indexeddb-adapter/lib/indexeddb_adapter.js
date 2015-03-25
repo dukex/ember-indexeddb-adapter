@@ -389,7 +389,7 @@ DS.IndexedDBAdapter = DS.Adapter.extend({
    */
   updateRecord: function (store, type, snapshot) {
     var _this = this,
-        record = snapshot,
+        record = snapshot.record,
         serializedRecord = record.serialize({includeId: true});
 
     return new Ember.RSVP.Promise(function(resolve, reject) {
